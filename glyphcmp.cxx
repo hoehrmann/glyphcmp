@@ -47,118 +47,111 @@ debug_write_pgm(image_data* image, char* path) {
 }
 
 double
-create_difference(image_data* left, image_data* right) {
-
-  // TODO: Now that the comments refer to left and right in the spatial
-  // sense, the variables should probably be renamed into A and B or so.
+compute_similarity(size_t widthA, size_t heightA, unsigned char* pixelsA,
+                   size_t widthB, size_t heightB, unsigned char* pixelsB) {
 
   double area;
   double result;
   size_t sum = 0;
-  image_data* d = (image_data*)malloc(sizeof(image_data));
 
-  if (NULL == d) {
-    // malloc failed
-  }
+  size_t max_real_width  = MAX(widthA, widthB);
+  size_t min_real_width  = MIN(widthA, widthB);
+  size_t min_real_height = MIN(heightA, heightB);
+  size_t max_real_height = MAX(heightA, heightB);
+  size_t widthD = 2 + max_real_width;
+  size_t heightD = 2 + max_real_height;
+  unsigned char* pixelsD;
 
-  size_t max_real_width  = MAX( left->real_width,  right->real_width  );
-  size_t min_real_width  = MIN( left->real_width,  right->real_width  );
-  size_t min_real_height = MIN( left->real_height, right->real_height );
-  size_t max_real_height = MAX( left->real_height, right->real_height );
+  pixelsD = (uint8_t*)malloc(sizeof(*(pixelsD)) * widthD * heightD);
 
-  d->real_width  = 2 + max_real_width;
-  d->real_height = 2 + max_real_height;
-
-  size_t image_data_byte_count =
-    sizeof(*(d->p)) * d->real_width * d->real_height;
-
-  d->p = (uint8_t*)malloc(image_data_byte_count);
-
-  if (NULL == d->p) {
+  if (NULL == pixelsD) {
     // malloc failed
   }
 
   // white border left and right
-  for (size_t y = 0; y < d->real_height; ++y) {
-    d->p[y * d->real_width + 0] = 0xFF;
-    d->p[y * d->real_width + d->real_width - 1] = 0xFF;
+  for (size_t y = 0; y < heightD; ++y) {
+    pixelsD[y * widthD + 0] = 0xFF;
+    pixelsD[y * widthD + widthD - 1] = 0xFF;
   }
 
   // white border top and bottom
-  for (size_t x = 0; x < d->real_width; ++x) {
-    d->p[0 * d->real_width + x] = 0xFF;
-    d->p[(d->real_height - 1) * d->real_width + x] = 0xFF;
+  for (size_t x = 0; x < widthD; ++x) {
+    pixelsD[0 * widthD + x] = 0xFF;
+    pixelsD[(heightD - 1) * widthD + x] = 0xFF;
   }
 
-  // The bottom right part covered by neither `left` nor `right`
+  // The bottom right part covered by neither `A` nor `B`
   // unless one image fully contains the other in which case the
   // later loops will override the value again...
   for (size_t y = min_real_height; y < max_real_height; ++y) {
     for (size_t x = min_real_width; x < max_real_width; ++x) {
-      d->p[(y + 1) * d->real_width + (x + 1)] = 0;
+      pixelsD[(y + 1) * widthD + (x + 1)] = 0;
     }
   }
 
-  // The right part of `left` that does not intersect `right`
-  for (size_t y = 0; y < left->real_height; ++y) {
-    for (size_t x = right->real_width; x < left->real_width; ++x) {
-      d->p[(y + 1) * d->real_width + (x + 1)] =
-        left->p[y * left->real_width + x] ^ 0xff;
+  // The right part of `A` that does not intersect `B`
+  for (size_t y = 0; y < heightA; ++y) {
+    for (size_t x = widthB; x < widthA; ++x) {
+      pixelsD[(y + 1) * widthD + (x + 1)] =
+        pixelsA[y * widthA + x] ^ 0xff;
     }
   }
 
-  // The right part of `right` that does not intersect `left`
-  for (size_t y = 0; y < right->real_height; ++y) {
-    for (size_t x = left->real_width; x < right->real_width; ++x) {
-      d->p[(y + 1) * d->real_width + (x + 1)] =
-        right->p[y * right->real_width + x] ^ 0xff;
+  // The right part of `B` that does not intersect `A`
+  for (size_t y = 0; y < heightB; ++y) {
+    for (size_t x = widthA; x < widthB; ++x) {
+      pixelsD[(y + 1) * widthD + (x + 1)] =
+        pixelsB[y * widthB + x] ^ 0xff;
     }
   }
 
-  // The bottom part of `right` that does not intersect `left`
-  for (size_t y = left->real_height; y < right->real_height; ++y) {
-    for (size_t x = 0; x < right->real_width; ++x) {
-      d->p[(y + 1) * d->real_width + (x + 1)] =
-        right->p[y * right->real_width + x] ^ 0xff;
+  // The bottom part of `B` that does not intersect `A`
+  for (size_t y = heightA; y < heightB; ++y) {
+    for (size_t x = 0; x < widthB; ++x) {
+      pixelsD[(y + 1) * widthD + (x + 1)] =
+        pixelsB[y * widthB + x] ^ 0xff;
     }
   }
 
-  // The bottom part of `left` that does not intersect `right`
-  for (size_t y = right->real_height; y < left->real_height; ++y) {
-    for (size_t x = 0; x < left->real_width; ++x) {
-      d->p[(y + 1) * d->real_width + (x + 1)] =
-        left->p[y * left->real_width + x] ^ 0xff;
+  // The bottom part of `A` that does not intersect `B`
+  for (size_t y = heightB; y < heightA; ++y) {
+    for (size_t x = 0; x < widthA; ++x) {
+      pixelsD[(y + 1) * widthD + (x + 1)] =
+        pixelsA[y * widthA + x] ^ 0xff;
     }
   }
 
-  // The intersection of `left` and `right`
+  // The intersection of `A` and `B`
   for (size_t y = 0; y < min_real_height; ++y) {
     for (size_t x = 0; x < min_real_width; ++x) {
-      d->p[(y + 1) * d->real_width + (x + 1)] = 
-        (left->p[y * left->real_width + x] ^
-            right->p[y * right->real_width + x]);
+      pixelsD[(y + 1) * widthD + (x + 1)] = 
+        (pixelsA[y * widthA + x] ^
+            pixelsB[y * widthB + x]);
     }
   }
 
-  // debug_write_pgm(d, "debug.pgm");
-
-  for (size_t y = 1; y < d->real_height - 1; ++y) {
-    for (size_t x = 1; x < d->real_width - 1; ++x) {
+  for (size_t y = 1; y < heightD - 1; ++y) {
+    for (size_t x = 1; x < widthD - 1; ++x) {
       int has_black_neighbour = 
-        !d->p[(y - 1) * d->real_width + (x + 0)] || // above
-        !d->p[(y + 1) * d->real_width + (x + 0)] || // below
-        !d->p[(y + 0) * d->real_width + (x - 1)] || // left
-        !d->p[(y + 0) * d->real_width + (x + 1)];   // right
-      if (!d->p[(y) * d->real_width + (x)] || has_black_neighbour)
+        !pixelsD[(y - 1) * widthD + (x + 0)] || // above
+        !pixelsD[(y + 1) * widthD + (x + 0)] || // below
+        !pixelsD[(y + 0) * widthD + (x - 1)] || // left
+        !pixelsD[(y + 0) * widthD + (x + 1)];   // right
+      if (!pixelsD[(y) * widthD + (x)] || has_black_neighbour)
         sum++;
     }
   }
 
-  area = (d->real_width - 2) * (d->real_height - 2);
+  area = (widthD - 2) * (heightD - 2);
   result = (double)sum/area;
-  free(d->p);
-  free(d);
+  free(pixelsD);
   return result;
+}
+
+double
+compute_similarity_imgs(image_data* left, image_data* right) {
+  return compute_similarity(left->real_width, left->real_height,
+    left->p, right->real_width, right->real_height, right->p);
 }
 
 int
@@ -255,10 +248,11 @@ main(int argc, char *argv[]) {
 
   for (size_t left = 0; left < image_count; ++left) {
     for (size_t right = left + 1; right < image_count; ++right) {
-      double diff = create_difference(&images[left], &images[right]);
-      printf("%u\t%u\t%f\n", left, right, diff);
+      double s = compute_similarity_imgs(&images[left], &images[right]);
+      printf("%u\t%u\t%f\n", left, right, s);
     }
   }
 
   return EXIT_SUCCESS;
 }
+
